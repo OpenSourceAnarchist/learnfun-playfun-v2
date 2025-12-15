@@ -1,0 +1,2 @@
+game smb
+movie smb-walk.fm2

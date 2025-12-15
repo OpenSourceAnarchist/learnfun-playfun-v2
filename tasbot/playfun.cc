@@ -1205,13 +1205,12 @@ struct PlayFun {
     // but there are not many futures and not many dropfutures.
     static const int TOTAL_TO_DROP = DROPFUTURES + MUTATEFUTURES;
     for (int t = 0; t < TOTAL_TO_DROP; t++) {
-      // fprintf(stderr, "Drop futures (%d/%d).\n", t, DROPFUTURES);
       CHECK(!futures->empty());
       CHECK(futures->size() <= futuretotals.size());
       double worst_total = futuretotals[0];
       int worst_idx = 0;
       for (int i = 1; i < futures->size(); i++) {
-	if (worst_total < futuretotals[i]) {
+	if (futuretotals[i] < worst_total) {
 	  worst_total = futuretotals[i];
 	  worst_idx = i;
 	}
