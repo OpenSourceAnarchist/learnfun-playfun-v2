@@ -42,14 +42,14 @@ void HSV(double h, double s, double v,
 template<class T>
 static void Shuffle(vector<T> *v) {
   static ArcFour rc("shuffler");
-  for (int i = 0; i < v->size(); i++) {
+  for (size_t i = 0; i < v->size(); i++) {
     uint32 h = 0;
     h = (h << 8) | rc.Byte();
     h = (h << 8) | rc.Byte();
     h = (h << 8) | rc.Byte();
     h = (h << 8) | rc.Byte();
 
-    int j = h % v->size();
+    size_t j = h % v->size();
     if (i != j) {
       swap((*v)[i], (*v)[j]);
     }

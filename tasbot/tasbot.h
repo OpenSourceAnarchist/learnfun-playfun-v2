@@ -7,33 +7,13 @@
 
 #include "../cc-lib/base/stringprintf.h"
 
-#ifdef __GNUC__
-#include <ext/hash_map>
-#include <ext/hash_set>
-#else
-#include <hash_map>
-#include <hash_set>
-#endif
+// Modernized: use C++11 unordered containers instead of deprecated hash_map/hash_set
+#include <unordered_map>
+#include <unordered_set>
 
 #define TASBOT_SAMPLE_RATE 44100
 
 #define DEBUGGING 0
-
-#ifdef __GNUC__
-namespace std {
-using namespace __gnu_cxx;
-}
-
-// Needed on cygwin, at least. Maybe not all gnuc?
-namespace __gnu_cxx {
-template<>
-struct hash< unsigned long long > {
-  size_t operator()( const unsigned long long& x ) const {
-    return x;
-  }
-};
-}
-#endif
 
 // TODO: Use good logging package.
 #define CHECK(condition) \

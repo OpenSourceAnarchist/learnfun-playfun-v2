@@ -39,7 +39,7 @@ vector<uint8> RLE::CompressEx(const vector<uint8> &in,
   // 255.
   const int max_antirun_length = (int)(255 - run_cutoff) + 1;
 
-  for (int i = 0; i < in.size(); /* in loop */) {
+  for (size_t i = 0; i < in.size(); /* in loop */) {
     // Greedy: Grab the longest prefix of bytes that are the same,
     // up to max_run_length.
     const uint8 target = in[i];
@@ -71,7 +71,7 @@ vector<uint8> RLE::CompressEx(const vector<uint8> &in,
       // same.
       int anti_run_length = 1;
       while (anti_run_length < max_antirun_length &&
-	     i + anti_run_length + 1 < in.size() &&
+	     i + static_cast<size_t>(anti_run_length) + 1 < in.size() &&
 	     in[i + anti_run_length] != 
 	     in[i + anti_run_length + 1]) {
 	anti_run_length++;
@@ -112,7 +112,7 @@ bool RLE::DecompressEx(const vector<uint8> &in,
   // below).
   out->clear();
   
-  for (int i = 0; i < in.size(); /* in loop */) {
+  for (size_t i = 0; i < in.size(); /* in loop */) {
     const uint8 control = in[i];
     i++;
     if (control <= run_cutoff) {
@@ -120,8 +120,8 @@ bool RLE::DecompressEx(const vector<uint8> &in,
       const int run_length = control + 1;
       
       if (i >= in.size()) {
-	printf("Run of length %d, i now %d, in.size() is %d\n",
-	       run_length, i, (int)in.size());
+	printf("Run of length %d, i now %zu, in.size() is %zu\n",
+	       run_length, i, in.size());
 	return false;
       }
       
@@ -139,9 +139,9 @@ bool RLE::DecompressEx(const vector<uint8> &in,
       // represented as 0) so we code starting at 2.
       const int antirun_length = control - run_cutoff + 1;
       
-      if (i + antirun_length >= in.size()) {
-	printf("Antirun of length %d, i now %d, in.size() is %d\n",
-	       antirun_length, i, (int)in.size());
+      if (i + static_cast<size_t>(antirun_length) >= in.size()) {
+	printf("Antirun of length %d, i now %zu, in.size() is %zu\n",
+	       antirun_length, i, in.size());
 	return false;
       }
 

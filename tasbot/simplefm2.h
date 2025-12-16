@@ -5,10 +5,9 @@
 #ifndef __SIMPLEFM2_H
 #define __SIMPLEFM2_H
 
+#include <cstdint>
 #include <vector>
 #include <string>
-
-#include "fceu/types.h"
 
 #define INPUT_R (1<<7)
 #define INPUT_L (1<<6)
@@ -19,6 +18,7 @@
 #define INPUT_B (1<<1)
 #define INPUT_A (1   )
 
+using uint8 = std::uint8_t;
 using namespace std;
 
 struct SimpleFM2 {

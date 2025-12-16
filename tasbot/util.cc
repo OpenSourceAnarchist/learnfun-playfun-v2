@@ -32,16 +32,16 @@ string DrawDots(int WIDTH, int HEIGHT,
   vector<double> sorted = values;
   std::sort(sorted.begin(), sorted.end());
   string out;
-  for (int i = 0; i < values.size(); i++) {
-    int size = values.size();
-    int sorted_idx = 
+  for (size_t i = 0; i < values.size(); i++) {
+    size_t size = values.size();
+    size_t sorted_idx = 
       lower_bound(sorted.begin(), sorted.end(), values[i]) - sorted.begin();
     double opacity = 1.0;
-    if (sorted_idx < 0.1 * size || sorted_idx > 0.9 * size) {
+    if (sorted_idx < size / 10 || sorted_idx > size * 9 / 10) {
       opacity = 0.2;
-    } else if (sorted_idx < 0.2 * size || sorted_idx > 0.8 * size) {
+    } else if (sorted_idx < size / 5 || sorted_idx > size * 4 / 5) {
       opacity = 0.4;
-    } else if (sorted_idx < 0.3 * size || sorted_idx > 0.7 * size) {
+    } else if (sorted_idx < size * 3 / 10 || sorted_idx > size * 7 / 10) {
       opacity = 0.8;
     } else if (sorted_idx == size / 2) {
       opacity = 1.0;
@@ -51,7 +51,7 @@ string DrawDots(int WIDTH, int HEIGHT,
 			"fill=\"%s\" />",
 			Coord(xf * WIDTH).c_str(), 
 			Coord(HEIGHT * (1.0 - (values[i] / maxval))).c_str(),
-			(i == chosen_idx) ? 10 : 4,
+			(i == static_cast<size_t>(chosen_idx)) ? 10 : 4,
 			opacity,
 			color.c_str());
   }

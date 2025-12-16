@@ -57,10 +57,10 @@
    This is great easy.
  */
 
+#include <cstdint>
 #include <vector>
 
-#include "fceu/types.h"
-
+using uint8 = std::uint8_t;
 using namespace std;
 
 struct Objective {
@@ -85,6 +85,13 @@ struct Objective {
 
   void EnumerateFullAll(void (*f)(const vector<int> &ordering),
                         int limit, int seed);
+
+  // Enumerate both increasing and decreasing objectives.
+  // Decreasing objectives are returned with negative indices.
+  // E.g., ordering = [-100, 50] means: prefer mem[100] decreasing,
+  // then prefer mem[50] increasing.
+  void EnumerateFullAllWithDecreasing(void (*f)(const vector<int> &ordering),
+                                      int limit, int seed);
 
 private:
 

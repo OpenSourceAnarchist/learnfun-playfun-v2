@@ -411,7 +411,7 @@ bool ReadProto(TCPsocket sock, T *t) {
 
   // Drop-in replacement for SDLNet_TCP_Recv.
   int ret = sdlnet_recvall(sock, (void *)buffer, len);
-  if (len != ret) {
+  if (static_cast<int>(len) != ret) {
     fprintf(stderr, "ReadProto: Failed to read %d bytes (got %d), err %d\n",
             len, ret, SDLNet_GetLastError());
     free(buffer);
@@ -448,7 +448,7 @@ bool WriteProto(TCPsocket sock, const T &t) {
     return false;
   }
 
-  if (len != SDLNet_TCP_Send(sock, (const void *)s.c_str(), len)) {
+  if (static_cast<int>(len) != SDLNet_TCP_Send(sock, (const void *)s.c_str(), len)) {
     return false;
   }
 

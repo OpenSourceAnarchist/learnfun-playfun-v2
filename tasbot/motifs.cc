@@ -18,7 +18,7 @@ Motifs::Motifs() : rc("motifs") {}
 
 static string InputsToString(const vector<uint8> &inputs) {
   string s;
-  for (int i = 0; i < inputs.size(); i++) {
+  for (size_t i = 0; i < inputs.size(); i++) {
     char d[64] = {0};
     sprintf(d, "%s%d", (i ? " " : ""), inputs[i]);
     s += d;
@@ -49,15 +49,15 @@ void Motifs::Checkpoint(int framenum) {
 Motifs *Motifs::LoadFromFile(const string &filename) {
   Motifs *mm = new Motifs;
   vector<string> lines = Util::ReadFileToLines(filename);
-  for (int i = 0; i < lines.size(); i++) {
+  for (size_t i = 0; i < lines.size(); i++) {
     stringstream ss(lines[i], stringstream::in);
     double d;
     ss >> d;
     vector<uint8> inputs;
     while (!ss.eof()) {
-      int i;
-      ss >> i;
-      inputs.push_back((uint8)i);
+      int val;
+      ss >> val;
+      inputs.push_back((uint8)val);
     }
 
     // printf("MOTIF: %f | %s\n", d, InputsToString(inputs).c_str());
@@ -77,7 +77,7 @@ void Motifs::SaveToFile(const string &filename) const {
     out += s + "\n";
   }
   // printf("%s\n", out.c_str());
-  printf("Wrote %lld motifs to %s.\n", motifs.size(), filename.c_str());
+  printf("Wrote %zu motifs to %s.\n", motifs.size(), filename.c_str());
   Util::WriteFile(filename, out);
 }
 
@@ -86,7 +86,7 @@ void Motifs::AddInputs(const vector<uint8> &inputs) {
   static const int CHUNK_SIZE = 10;
   vector<uint8> current;
 
-  for (int i = 0; i < inputs.size(); i++) {
+  for (size_t i = 0; i < inputs.size(); i++) {
     current.push_back(inputs[i]);
     if (current.size() == CHUNK_SIZE) {
       motifs[current].weight += 1.0;
@@ -209,14 +209,14 @@ void Motifs::SaveHTML(const string &filename) const {
 
   std::sort(resorted.begin(), resorted.end(), WeightDescending);
 
-  for (int r = 0; r < resorted.size(); r++) {
+  for (size_t r = 0; r < resorted.size(); r++) {
     const vector<uint8> &inputs = resorted[r].inputs;
     const Info &info = resorted[r].info;
     
     out += "<div class=\"motif\">\n"
       "<div class=\"inputs\">";
     string last = "";
-    for (int i = 0; i < inputs.size(); i++) {
+    for (size_t i = 0; i < inputs.size(); i++) {
       out += "<span class=\"input\">";
       string s = SimpleFM2::InputToColorString(inputs[i]);
       if (s == last) {
@@ -235,7 +235,7 @@ void Motifs::SaveHTML(const string &filename) const {
     if (!info.history.empty()) {
       int lastframe = info.history[0].first;
       double lastval = info.history[0].second;
-      for (int i = 1; i < info.history.size(); i++) {
+      for (size_t i = 1; i < info.history.size(); i++) {
 	if (lastval != info.history[i].second) {
 	  out += ShowRange(lastframe, lastval,
 			   info.history[i].first);

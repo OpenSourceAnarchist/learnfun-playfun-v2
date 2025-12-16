@@ -1,11 +1,11 @@
 /* Tests for the Objective learning library. */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cstdint>
 
 #include "tasbot.h"
-#include "fceu/types.h"
 #include "../cc-lib/util.h"
 #include "../cc-lib/arcfour.h"
 #include "objective.h"
@@ -13,6 +13,8 @@
 #ifdef MARIONET
 #include "SDL.h" 
 #endif
+
+using uint8 = std::uint8_t;
 
 // Expected lex order is 0, 4, 1.
 // 3 is ruled out because it's non-monotonic and 2 never increases.
@@ -74,7 +76,7 @@ static vector< vector<uint8> > MakeMem(const char *(&mem)[M]) {
 }
 
 static void pr(const vector<int> &ordering) {
-  for (int i = 0; i < ordering.size(); i++) {
+  for (size_t i = 0; i < ordering.size(); i++) {
     printf("%d ", ordering[i]);
   }
   printf("\n");

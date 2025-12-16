@@ -1,11 +1,11 @@
 /* Tests for the WeightedObjectives class. */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cstdint>
 
 #include "tasbot.h"
-#include "fceu/types.h"
 #include "../cc-lib/util.h"
 #include "../cc-lib/arcfour.h"
 #include "weighted-objectives.h"

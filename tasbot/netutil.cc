@@ -1,5 +1,7 @@
 
 #include <string>
+#include <bit>
+#include <cstdint>
 
 #include "netutil.h"
 #include "SDL.h"
@@ -8,8 +10,9 @@
 using namespace std;
 
 string IPString(const IPaddress &ip) {
-  // XXX assumes little-endian
-  int port = ((ip.port & 255) << 8) | (255 & (ip.port >> 8));
+  // Port is in network byte order (big-endian), convert to host
+  uint16_t port = (static_cast<uint16_t>(ip.port & 0xFF) << 8) | 
+                  static_cast<uint16_t>((ip.port >> 8) & 0xFF);
   return StringPrintf("%d.%d.%d.%d:%d",
                       255 & ip.host,
                       255 & (ip.host >> 8),

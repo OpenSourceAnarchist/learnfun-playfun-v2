@@ -4,13 +4,16 @@
 #ifndef __WEIGHTED_OBJECTIVES_H
 #define __WEIGHTED_OBJECTIVES_H
 
+#include <cstdint>
 #include <map>
 #include <vector>
 #include <string>
 #include <utility>
 
 #include "tasbot.h"
-#include "fceu/types.h"
+
+using uint8 = std::uint8_t;
+using uint64 = std::uint64_t;
 
 struct WeightedObjectives {
   explicit WeightedObjectives(const std::vector< vector<int> > &objs);
@@ -39,6 +42,13 @@ struct WeightedObjectives {
   // that where mem1 < mem2 minus the number where mem1 > mem2.
   double Evaluate(const vector<uint8> &mem1,
                   const vector<uint8> &mem2) const;
+
+  // Tom7 TODO: "At search time, weight changes in objective functions by
+  // the magnitude of the change, not just the number that went up or down."
+  // This version weights by how much the bytes actually changed, not just
+  // whether they improved or worsened.
+  double EvaluateMagnitude(const vector<uint8> &mem1,
+                           const vector<uint8> &mem2) const;
 
   // Observe a game state. This informs us about the values that
   // the objective functions can take on, which lets us score the

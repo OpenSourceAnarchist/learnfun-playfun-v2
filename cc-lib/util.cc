@@ -1,57 +1,43 @@
 
 #include <sys/stat.h>
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
 #include <cstring>
 #include <ctime>
-#include <string.h>
-#include <algorithm>
+#include <format>
+#include <fstream>
+#include <memory>
+#include <span>
+#include <string>
+#include <string_view>
 
 #include "util.h"
 
 #if defined(WIN32) || defined(__MINGW32__) || defined(__MINGW64__)
-   /* chdir */
 #  include <direct.h>
-   /* getpid */
 #  include <process.h>
-   /* time */
 #  include <time.h>
-   /* rename */
 #  include <io.h>
-   /* setclipboard */
 #  include <windows.h>
-
-#if defined(__MINGW32__) || defined(__MINGW64__)
-// This used to be included unconditionally in the header;
-// not sure why? -tom7
-#  include <dirent.h>
-#endif
-
-// Visual studio only.
-#if defined(WIN32) && !defined(__MINGW32__) && !defined(__MINGW64__)
-# pragma warning(disable: 4996)
-#endif
-
-#else /* posix */
-   /* chdir, unlink */
+#  if defined(__MINGW32__) || defined(__MINGW64__)
+#    include <dirent.h>
+#  endif
+#  if defined(WIN32) && !defined(__MINGW32__) && !defined(__MINGW64__)
+#    pragma warning(disable: 4996)
+#  endif
+#else
 #  include <unistd.h>
-   /* getpid */
 #  include <sys/types.h>
-   /* isalnum */
-#  include <ctype.h>
-   /* directory stuff */
 #  include <dirent.h>
 #endif
-
 
 string itos(int i) {
-  char s[64];
-  sprintf(s, "%d", i);
-  return (string)s;
+  return std::to_string(i);
 }
 
 string dtos(double d) {
-  char s[64];
-  sprintf(s, "%.2f", d);
-  return (string)s;
+  return std::format("{:.2f}", d);
 }
 
 // TODO: I never tested this on posix.
@@ -176,30 +162,18 @@ bool Util::makedir(const string &d) {
 }
 
 string Util::ptos(void * p) {
-  char s[64];
-  sprintf(s, "%p", p);
-  return (string)s;
+  return std::format("{}", p);
 }
 
 string Util::ReadFile(const string &s) {
-  if (Util::isdir(s)) return "";
-  if (s == "") return "";
-
-  FILE * f = fopen(s.c_str(), "rb");
+  if (s.empty() || isdir(s)) return "";
+  std::ifstream f(s, std::ios::binary | std::ios::ate);
   if (!f) return "";
-  fseek(f, 0, SEEK_END);
-  int size = ftell(f);
-  fseek(f, 0, SEEK_SET);
-
-  char * ss = (char*)malloc(size);
-  fread(ss, 1, size, f);
-
-  fclose(f);
-
-  string ret = string(ss, size);
-  free(ss);
-
-  return ret;
+  auto size = f.tellg();
+  f.seekg(0);
+  string content(static_cast<size_t>(size), '\0');
+  f.read(content.data(), size);
+  return content;
 }
 
 vector<string> Util::ReadFileToLines(const string &f) {
@@ -226,8 +200,8 @@ vector<string> Util::SplitToLines(const string &s) {
 map<string, string> Util::ReadFileToMap(const string &f) {
   map<string, string> m;
   vector<string> lines = ReadFileToLines(f);
-  for (int i = 0; i < lines.size(); i++) {
-    string rest = lines[i];
+  for (auto &line : lines) {
+    string rest = line;
     string tok = chop(rest);
     rest = losewhitel(rest);
     m.insert(make_pair(tok, rest));
@@ -235,109 +209,53 @@ map<string, string> Util::ReadFileToMap(const string &f) {
   return m;
 }
 
-// PERF memcpy
 vector<unsigned char> Util::ReadFileBytes(const string &f) {
-  string s = ReadFile(f);
-  vector<unsigned char> bytes;
-  bytes.reserve(s.size());
-  for (int i = 0; i < s.size(); i++) {
-    bytes.push_back((unsigned char)s[i]);
-  }
+  std::ifstream file(f, std::ios::binary | std::ios::ate);
+  if (!file) return {};
+  auto size = file.tellg();
+  file.seekg(0);
+  vector<unsigned char> bytes(static_cast<size_t>(size));
+  file.read(reinterpret_cast<char*>(bytes.data()), size);
   return bytes;
 }
 
-
-static bool hasmagicf(FILE * f, const string & mag) {
-  char * hdr = (char*)malloc(mag.length());
-  if (!hdr) return false;
-
-  /* we may not even be able to read sizeof(header) bytes! */
-  if (mag.length() != fread(hdr, 1, mag.length(), f)) {
-    free(hdr);
-    return false;
-  }
-
-  for (unsigned int i = 0; i < mag.length(); i++) {
-    if (hdr[i] != mag[i]) {
-      free(hdr);
-      return false;
-    }
-  }
-
-  free(hdr);
-  return true;
+static bool hasmagicf(std::ifstream &f, std::string_view mag) {
+  std::string hdr(mag.size(), '\0');
+  if (!f.read(hdr.data(), static_cast<std::streamsize>(mag.size()))) return false;
+  return hdr == mag;
 }
 
 bool Util::hasmagic(string s, const string &mag) {
-  FILE * f = fopen(s.c_str(), "rb");
-  if (!f) return false;
-
-  bool hm = hasmagicf(f, mag);
-
-  fclose(f);
-  return hm;
+  std::ifstream f(s, std::ios::binary);
+  return f && hasmagicf(f, mag);
 }
 
 string Util::readfilemagic(string s, const string &mag) {
-  if (isdir(s)) return "";
-  if (s == "") return "";
-
-  // printf("opened %s\n", s.c_str());
-
-  /* PERF try this: and see! */
-  // printf("Readfile '%s'\n", s.c_str());
-
-  FILE * f = fopen(s.c_str(), "rb");
-
-  if (!f) return "";
-
-
-  if (!hasmagicf(f, mag)) {
-    fclose(f);
-    return "";
-  }
-
-  /* ok, now just read file */
-
-  fseek(f, 0, SEEK_END);
-  int size = ftell(f);
-  fseek(f, 0, SEEK_SET);
-
-  char * ss = (char*)malloc(size);
-  fread(ss, 1, size, f);
-
-  fclose(f);
-
-  string ret = string(ss, size);
-  free(ss);
-
-  return ret;
+  if (s.empty() || isdir(s)) return "";
+  std::ifstream f(s, std::ios::binary);
+  if (!f || !hasmagicf(f, mag)) return "";
+  f.seekg(0, std::ios::end);
+  auto size = f.tellg();
+  f.seekg(0);
+  string content(static_cast<size_t>(size), '\0');
+  f.read(content.data(), size);
+  return content;
 }
 
 bool Util::WriteFile(const string &fn, const string &s) {
-
-  FILE * f = fopen(fn.c_str(), "wb");
+  std::ofstream f(fn, std::ios::binary);
   if (!f) return false;
-
-  /* XXX check failure */
-  fwrite(s.c_str(), 1, s.length(), f);
-
-  fclose(f);
-
-  return true;
+  f.write(s.data(), static_cast<std::streamsize>(s.size()));
+  return f.good();
 }
 
 bool Util::WriteFileBytes(const string &fn,
-			  const vector<unsigned char> &bytes) {
-  FILE * f = fopen(fn.c_str(), "wb");
+                          const vector<unsigned char> &bytes) {
+  std::ofstream f(fn, std::ios::binary);
   if (!f) return false;
-
-  /* XXX check failure */
-  fwrite(&bytes[0], 1, bytes.size(), f);
-
-  fclose(f);
-
-  return true;
+  f.write(reinterpret_cast<const char*>(bytes.data()), 
+          static_cast<std::streamsize>(bytes.size()));
+  return f.good();
 }
 
 string Util::sizes(int i) {
@@ -370,76 +288,54 @@ int Util::shout(int b, string s, unsigned int & idx) {
 
 unsigned int Util::hash(string s) {
   unsigned int h = 0x714FA5DD;
-  for (unsigned int i = 0; i < s.length(); i ++) {
-    h = (h << 11) | (h >> (32 - 11));
+  for (unsigned char c : s) {
+    h = (h << 11) | (h >> 21);
     h *= 3113;
-    h ^= (unsigned char)s[i];
+    h ^= c;
   }
   return h;
 }
 
 string Util::lcase(string in) {
   string out;
-  for (unsigned int i = 0; i < in.length(); i++) {
-    if (in[i] >= 'A' &&
-	in[i] <= 'Z') out += in[i]|32;
-
-    else out += in[i];
+  out.reserve(in.size());
+  for (char c : in) {
+    out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   }
   return out;
 }
 
 string Util::ucase(string in) {
   string out;
-  for (unsigned int i = 0; i < in.length(); i++) {
-    if (in[i] >= 'a' &&
-	in[i] <= 'z') out += (in[i] & (~ 32));
-
-    else out += in[i];
+  out.reserve(in.size());
+  for (char c : in) {
+    out += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
   }
   return out;
 }
 
 string Util::fileof(string s) {
-  for (long long int i = s.length() - 1; i >= 0; i --) {
-    if (s[i] == DIRSEPC) {
-      return s.substr(i + 1, s.length() - (i + 1));
-    }
-  }
-  return s;
+  size_t pos = s.rfind(DIRSEPC);
+  return (pos == string::npos) ? s : s.substr(pos + 1);
 }
 
 string Util::pathof(string s) {
-  if (s == "") return ".";
-  for (long long int i = s.length() - 1; i >= 0; i --) {
-    if (s[i] == DIRSEPC) {
-      return s.substr(0, i);
-    }
-  }
-  return ".";
+  if (s.empty()) return ".";
+  size_t pos = s.rfind(DIRSEPC);
+  return (pos == string::npos || pos == 0) ? "." : s.substr(0, pos);
 }
 
-/* XX can use endswith below */
 string Util::ensureext(string f, string ext) {
-  if (f.length() < ext.length())
-    return f + ext;
-  else {
-    if (f.substr(f.length() - ext.length(),
-		 ext.length()) != ext)
-      return f + ext;
-    else return f;
-  }
+  if (f.length() >= ext.length() && f.ends_with(ext)) return f;
+  return f + ext;
 }
 
-bool Util::endswith (string big, string small_) {
-  if (small_.length() > big.length()) return false;
-  return big.substr(big.length() - small_.length(),
-		    small_.length()) == small_;
+bool Util::endswith(string big, string small_) {
+  return big.ends_with(small_);
 }
 
-bool Util::startswith (string big, string small_) {
-  if (small_.length() > big.length()) return false;
-  return big.substr(0, small_.length()) == small_;
+bool Util::startswith(string big, string small_) {
+  return big.starts_with(small_);
 }
 
 int Util::changedir(string s) {
@@ -454,12 +350,10 @@ int stoi(string s) {
   return atoi(s.c_str());
 }
 
-/* XXX race. should use creat
-   with O_EXCL on unix, at least. */
 FILE * Util::open_new(string fname) {
   if (!ExistsFile(fname))
     return fopen(fname.c_str(), "wb+");
-  else return 0;
+  return nullptr;
 }
 
 string Util::getline(string & chunk) {
@@ -476,96 +370,56 @@ string Util::getline(string & chunk) {
   return ret;
 }
 
-/* PERF */
 string Util::fgetline(FILE * f) {
   string out;
   int c;
-  while ( (c = fgetc(f)), ((c != EOF) && (c != '\n')) ) {
-    /* ignore CR */
-    if (c != '\r') {
-      out += (char)c;
-    }
+  while ((c = fgetc(f)) != EOF && c != '\n') {
+    if (c != '\r') out += static_cast<char>(c);
   }
   return out;
 }
 
-/* PERF use substr instead of accumulating: this is used
-   frequently in the net stuff */
-/* return first token in line, removing it from 'line' */
 string Util::chop(string & line) {
-  for (unsigned int i = 0; i < line.length(); i ++) {
-    if (line[i] != ' ') {
-      string acc;
-      for (unsigned int j = i; j < line.length(); j ++) {
-	if (line[j] == ' ') {
-	  line = line.substr(j, line.length() - j);
-	  return acc;
-	} else acc += line[j];
-      }
-      line = "";
-      return acc;
-    }
+  size_t start = line.find_first_not_of(' ');
+  if (start == string::npos) { line.clear(); return ""; }
+  size_t end = line.find(' ', start);
+  if (end == string::npos) {
+    string result = line.substr(start);
+    line.clear();
+    return result;
   }
-  /* all whitespace */
-  line = "";
-  return "";
+  string result = line.substr(start, end - start);
+  line = line.substr(end);
+  return result;
 }
 
-/* PERF same */
 string Util::chopto(char c, string & line) {
-  string acc;
-  for (unsigned int i = 0; i < line.length(); i ++) {
-    if (line[i] != c) {
-      acc += line[i];
-    } else {
-      if (i < (line.length() - 1)) {
-	line = line.substr(i + 1, line.length() - (i + 1));
-	return acc;
-      } else {
-	line = "";
-	return acc;
-      }
-    }
+  size_t pos = line.find(c);
+  if (pos == string::npos) {
+    string result = line;
+    line.clear();
+    return result;
   }
-  /* character didn't appear; treat as an invisible
-     occurrence at the end */
-  line = "";
-  return acc;
+  string result = line.substr(0, pos);
+  line = line.substr(pos + 1);
+  return result;
 }
 
 string Util::losewhitel(const string & s) {
-  for (unsigned int i = 0; i < s.length(); i ++) {
-    switch(s[i]) {
-    case ' ':
-    case '\n':
-    case '\r':
-    case '\t':
-      /* keep going ... */
-      break;
-    default:
-      return s.substr(i, s.length() - i);
-    }
-  }
-  /* all whitespace */
-  return "";
+  size_t pos = s.find_first_not_of(" \n\r\t");
+  return (pos == string::npos) ? "" : s.substr(pos);
 }
 
 string Util::tempfile(string suffix) {
   static int tries = 0;
-
-  char * fname = new char[suffix.length() + 128];
-
+  string fname;
   do {
-    sprintf(fname,
-	    "%d_%d_%d%s",
-	    tries, getpid(), random(),
-	    suffix.c_str());
+    fname = std::to_string(tries) + "_" +
+            std::to_string(getpid()) + "_" +
+            std::to_string(random()) + suffix;
     tries++;
   } while (ExistsFile(fname));
-
-  string ret = fname;
-  delete fname;
-  return ret;
+  return fname;
 }
 
 /* break up the strings into tokens. A token is either
@@ -835,7 +689,7 @@ string Util::dirplus(const string &dir_, const string &file) {
 string Util::cdup(const string & dir) {
   /* XXX right second argument to rfind? I want to find the last / */
   size_t idx = dir.rfind(DIRSEP, dir.length() - 1);
-  if (idx != (signed)string::npos) {
+  if (idx != string::npos) {
     if (idx) return dir.substr(0, idx);
     else return ".";
   } else return ".";

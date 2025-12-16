@@ -37,14 +37,14 @@ struct WeightedObjectives::Info {
 WeightedObjectives::WeightedObjectives() {}
 
 WeightedObjectives::WeightedObjectives(const vector< vector<int> > &objs) {
-  for (int i = 0; i < objs.size(); i++) {
+  for (size_t i = 0; i < objs.size(); i++) {
     weighted[objs[i]] = new Info(1.0);
   }
 }
 
 static string ObjectiveToString(const vector<int> &obj) {
   string s;
-  for (int i = 0; i < obj.size(); i++) {
+  for (size_t i = 0; i < obj.size(); i++) {
     char d[64] = {0};
     sprintf(d, "%s%d", (i ? " " : ""), obj[i]);
     s += d;
@@ -56,7 +56,7 @@ WeightedObjectives *
 WeightedObjectives::LoadFromFile(const string &filename) {
   WeightedObjectives *wo = new WeightedObjectives;
   vector<string> lines = Util::ReadFileToLines(filename);
-  for (int i = 0; i < lines.size(); i++) {
+  for (size_t i = 0; i < lines.size(); i++) {
     string line = lines[i];
     Util::losewhitel(line);
     if (!line.empty() && !Util::startswith(line, "#")) {
@@ -119,7 +119,7 @@ void WeightedObjectives::Observe(const vector<uint8> &memory) {
     vector<uint8> *cur = &info->observations.back();
     cur->reserve(obj.size());
 
-    for (int i = 0; i < obj.size(); i++) {
+    for (size_t i = 0; i < obj.size(); i++) {
       cur->push_back(memory[obj[i]]);
     }
 
@@ -131,15 +131,21 @@ void WeightedObjectives::Observe(const vector<uint8> &memory) {
   }
 }
 
+// Returns true if mem1 < mem2 according to objective (mem1 is worse).
+// Negative entries in order mean "prefer decreasing".
 static bool LessObjective(const vector<uint8> &mem1, 
 			  const vector<uint8> &mem2,
 			  const vector<int> &order) {
-  for (int i = 0; i < order.size(); i++) {
-    int p = order[i];
-    if (mem1[p] > mem2[p])
-      return false;
-    if (mem1[p] < mem2[p])
-      return true;
+  for (size_t i = 0; i < order.size(); i++) {
+    int entry = order[i];
+    int p = (entry >= 0) ? entry : -entry;
+    bool prefer_decrease = (entry < 0);
+    
+    if (mem1[p] != mem2[p]) {
+      bool mem1_less = mem1[p] < mem2[p];
+      if (prefer_decrease) mem1_less = !mem1_less;
+      return mem1_less;
+    }
   }
 
   // Equal.
@@ -147,17 +153,27 @@ static bool LessObjective(const vector<uint8> &mem1,
 }
 
 // Order 1 means mem1 < mem2, -1 means mem1 > mem2, 0 means equal.
-// (note this is backwards from strcmp. Think of if like a multiplier
-// for the weight.)
+// Returns 1 if mem1 < mem2 according to objective, -1 if >, 0 if =.
+// Objective entries can be negative to indicate "prefer decreasing".
+// E.g., objective = [100, -200, 50] means:
+//   - First compare mem[100]: prefer larger values (increasing)
+//   - Then compare mem[200]: prefer smaller values (decreasing, note the negative)
+//   - Then compare mem[50]: prefer larger values
 static int Order(const vector<uint8> &mem1, 
 		 const vector<uint8> &mem2,
 		 const vector<int> &order) {
-  for (int i = 0; i < order.size(); i++) {
-    int p = order[i];
-    if (mem1[p] > mem2[p])
-      return -1;
-    if (mem1[p] < mem2[p])
-      return 1;
+  for (size_t i = 0; i < order.size(); i++) {
+    int entry = order[i];
+    int p = (entry >= 0) ? entry : -entry;  // Memory location (absolute)
+    bool prefer_decrease = (entry < 0);     // Negative means prefer decrease
+    
+    if (mem1[p] != mem2[p]) {
+      bool mem1_less = mem1[p] < mem2[p];
+      // For increasing: mem1 < mem2 means improvement (+1)
+      // For decreasing: mem1 > mem2 means improvement (+1)
+      if (prefer_decrease) mem1_less = !mem1_less;
+      return mem1_less ? 1 : -1;
+    }
   }
 
   // Equal.
@@ -195,6 +211,39 @@ double WeightedObjectives::Evaluate(const vector<uint8> &mem1,
   return score;
 }
 
+// Tom7 TODO: "At search time, weight changes in objective functions by the
+// magnitude of the change, not just the number that went up or down."
+// This version weights by how much the bytes actually changed.
+double WeightedObjectives::EvaluateMagnitude(const vector<uint8> &mem1,
+                                             const vector<uint8> &mem2) const {
+  double score = 0.0;
+  for (Weighted::const_iterator it = weighted.begin();
+       it != weighted.end(); ++it) {
+    const vector<int> &objective = it->first;
+    const double weight = it->second->weight;
+    
+    // For magnitude scoring, we care about how much the leading byte changed
+    // (the first byte in the lexicographic ordering that differs)
+    for (size_t i = 0; i < objective.size(); i++) {
+      int entry = objective[i];
+      int p = (entry >= 0) ? entry : -entry;
+      bool prefer_decrease = (entry < 0);
+      
+      if (mem1[p] != mem2[p]) {
+        // Calculate the magnitude of the change
+        int delta = static_cast<int>(mem2[p]) - static_cast<int>(mem1[p]);
+        if (prefer_decrease) delta = -delta;  // For decreasing objectives, invert
+        
+        // Weight by both the objective weight and the magnitude
+        // Normalize by 255 (max byte value) to keep scores comparable
+        score += weight * (static_cast<double>(delta) / 255.0);
+        break;  // Only count the leading difference (lexicographic)
+      }
+    }
+  }
+  return score;
+}
+
 #if 0
 // XXX can probably simplify this, but should probably just remove it.
 double WeightedObjectives::BuggyEvaluate(const vector<uint8> &mem1,
@@ -220,9 +269,11 @@ static vector<uint8> GetValues(const vector<uint8> &mem,
 			       const vector<int> &objective) {
   vector<uint8> out;
   out.resize(objective.size());
-  for (int i = 0; i < objective.size(); i++) {
-    CHECK(objective[i] < mem.size());
-    out[i] = mem[objective[i]];
+  for (size_t i = 0; i < objective.size(); i++) {
+    int entry = objective[i];
+    int p = (entry >= 0) ? entry : -entry;  // Handle negative (decreasing) indices
+    CHECK((size_t)p < mem.size());
+    out[i] = mem[p];
   }
   return out;
 }
@@ -231,7 +282,7 @@ static vector< vector<uint8> >
 GetUniqueValues(const vector< vector<uint8 > > &memories,
 		const vector<int> &objective) {
   set< vector<uint8> > values;
-  for (int i = 0; i < memories.size(); i++) {
+  for (size_t i = 0; i < memories.size(); i++) {
     values.insert(GetValues(memories[i], objective));
   }
     
@@ -255,6 +306,18 @@ static inline double GetValueFrac(const vector< vector<uint8> > &values,
   return (double)idx / values.size();
 }
 
+// Helper to extract values from memory given an objective (handles negative indices)
+static vector<uint8> ExtractObjValues(const vector<uint8> &mem, const vector<int> &obj) {
+  vector<uint8> cur;
+  cur.reserve(obj.size());
+  for (size_t i = 0; i < obj.size(); i++) {
+    int entry = obj[i];
+    int p = (entry >= 0) ? entry : -entry;
+    cur.push_back(mem[p]);
+  }
+  return cur;
+}
+
 double WeightedObjectives::GetNormalizedValue(const vector<uint8> &mem) {
   double sum = 0.0;
 
@@ -262,12 +325,7 @@ double WeightedObjectives::GetNormalizedValue(const vector<uint8> &mem) {
     const vector<int> &obj = it->first;
     Info *info = &*it->second;
     
-    vector<uint8> cur;
-    cur.reserve(obj.size());
-    for (int i = 0; i < obj.size(); i++) {
-      cur.push_back(mem[obj[i]]);
-    }
-
+    vector<uint8> cur = ExtractObjValues(mem, obj);
     sum += GetValueFrac(info->GetObservations(), cur);
   }
 
@@ -282,12 +340,7 @@ GetNormalizedValues(const vector<uint8> &mem) {
     const vector<int> &obj = it->first;
     Info *info = &*it->second;
     
-    vector<uint8> cur;
-    cur.reserve(obj.size());
-    for (int i = 0; i < obj.size(); i++) {
-      cur.push_back(mem[obj[i]]);
-    }
-
+    vector<uint8> cur = ExtractObjValues(mem, obj);
     out.push_back(GetValueFrac(info->GetObservations(), cur));
   }
 
@@ -375,7 +428,7 @@ void WeightedObjectives::SaveSVG(const vector< vector<uint8> > &memories,
     int numleft = MAXLEN;
     // Fill in points as space separated x,y coords
     int lastvalueindex = -1;
-    for (int i = 0; i < memories.size(); i++) {
+    for (size_t i = 0; i < memories.size(); i++) {
       vector<uint8> now = GetValues(memories[i], obj);
       int valueindex = GetValueIndex(values, now);
 
@@ -414,7 +467,7 @@ void WeightedObjectives::SaveSVG(const vector< vector<uint8> > &memories,
   out += TextSVG::Footer();
   Util::WriteFile(filename, out);
 
-  printf("Wrote %lld objectives, skipping %lld points, to %s\n", 
+  printf("Wrote %zu objectives, skipping %lu points, to %s\n", 
 	 weighted.size(), skipped, filename.c_str());
 }
 
@@ -469,7 +522,7 @@ void WeightedObjectives::SaveLua(int n, const string &filename) const {
 	"  ypos = ypos + 10;\n"
 	"  color = \"" + (string)colors[i % num_colors] + "\"\n";
       const vector<int> &v = *it->second;
-      for(int j = 0; j < v.size(); j++) {
+      for(size_t j = 0; j < v.size(); j++) {
 	out += StringPrintf("  wb(%d);\n", v[j]);
       }
       actual++;

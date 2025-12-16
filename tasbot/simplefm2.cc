@@ -9,7 +9,7 @@ using namespace std;
 vector<uint8> SimpleFM2::ReadInputs(const string &filename) {
   vector<string> contents = Util::ReadFileToLines(filename);
   vector<uint8> out;
-  for (int i = 0; i < contents.size(); i++) {
+  for (size_t i = 0; i < contents.size(); i++) {
     const string &line = contents[i];
     if (line.empty() || line[0] != '|')
       continue;
@@ -85,14 +85,14 @@ void SimpleFM2::WriteInputsWithSubtitles(const string &outputfile,
 	  fakeguid.c_str());
 
   const string *last = NULL;
-  for (int i = 0; i < subtitles.size(); i++) {
+  for (size_t i = 0; i < subtitles.size(); i++) {
     if (last == NULL || *last != subtitles[i]) {
-      fprintf(f, "subtitle %d %s\n", i, subtitles[i].c_str());
+      fprintf(f, "subtitle %zu %s\n", i, subtitles[i].c_str());
     }
     last = &subtitles[i];
   }
 
-  for (int i = 0; i < inputs.size(); i++) {
+  for (size_t i = 0; i < inputs.size(); i++) {
     fprintf(f, "|%c|", (i == 0) ? '2' : '0');
     static const char gamepad[] = "RLDUTSBA";
     for (int j = 0; j < 8; j++) {

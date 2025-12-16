@@ -2,11 +2,11 @@
 #ifndef __BASIS_UTIL_H
 #define __BASIS_UTIL_H
 
+#include <cstdint>
 #include <vector>
 #include <string>
 
-#include "fceu/types.h"
-
+using uint8 = std::uint8_t;
 using namespace std;
 
 struct BasisUtil {

@@ -2,6 +2,8 @@
 #include "objective.h"
 #include "tasbot.h"
 
+#include <algorithm>
+
 // Self-check output.
 #define DEBUG_OBJECTIVE 1
 #define VERBOSE_OBJECTIVE 0
@@ -19,7 +21,8 @@ struct CompareByHash {
   uint64 CrapHash(int a) {
     uint64 ret = ~a;
     for (int i = 0; i < (a & 3) + 1; i++) {
-      ret = (ret >> i) | (ret << (64 - i));
+      int shift = i & 63;  // Prevent UB: limit shift to 0-63
+      ret = (ret >> shift) | (ret << ((64 - shift) & 63));
       ret *= 31337;
       ret += (seed << 7) | (seed >> (64 - 7));
       ret ^= 0xDEADBEEF;
@@ -47,7 +50,7 @@ static void Shuffle(vector<int> *v, int seed) {
 static bool EqualOnPrefix(const vector<uint8> &mem1, 
 			  const vector<uint8> &mem2,
 			  const vector<int> &prefix) {
-  for (int i = 0; i < prefix.size(); i++) {
+  for (size_t i = 0; i < prefix.size(); i++) {
     int p = prefix[i];
     // printf("  eop %d: %d vs %d\n", p, mem1[i], mem2[i]);
     if (mem1[p] != mem2[p]) {
@@ -61,7 +64,7 @@ static bool EqualOnPrefix(const vector<uint8> &mem1,
 static bool LessEqual(const vector<uint8> &mem1, 
 		      const vector<uint8> &mem2,
 		      const vector<int> &order) {
-  for (int i = 0; i < order.size(); i++) {
+  for (size_t i = 0; i < order.size(); i++) {
     int p = order[i];
     VPRINTF("  %d: %d vs %d ", p, mem1[p], mem2[p]);
     if (mem1[p] > mem2[p])
@@ -96,7 +99,7 @@ void Objective::EnumeratePartial(const vector<int> &look,
   vector<int> lequal;
   lequal.reserve(look.size() - 1);
   VPRINTF("Equal on prefix:");
-  for (int lo = 0; lo < look.size() - 1; lo++) {
+  for (size_t lo = 0; lo < look.size() - 1; lo++) {
     int i = look[lo], j = look[lo + 1];
     if (EqualOnPrefix(memories[i], memories[j], *prefix)) {
       lequal.push_back(lo);
@@ -105,7 +108,7 @@ void Objective::EnumeratePartial(const vector<int> &look,
   }
   VPRINTF("\n");
 
-  for (int le = 0; le < left.size(); le++) {
+  for (size_t le = 0; le < left.size(); le++) {
     int c = left[le];
     bool less = false;
 
@@ -115,14 +118,14 @@ void Objective::EnumeratePartial(const vector<int> &look,
     // prefix. (But it should get ignored below since it will
     // obviously be equal whenever EqualOnPrefix and it's in the
     // prefix.)
-    for (int i = 0; i < prefix->size(); i++) {
+    for (size_t i = 0; i < prefix->size(); i++) {
       if ((*prefix)[i] == c) {
 	VPRINTF("  skip %d in prefix\n", c);
 	goto skip;
       }
     }
 
-    for (int li = 0; li < lequal.size(); li++) {
+    for (size_t li = 0; li < lequal.size(); li++) {
       int lo = lequal[li];
       int i = look[lo], j = look[lo + 1];
       VPRINTF("  at lo %d. i=%d, j=%d\n", lo, i, j);
@@ -154,12 +157,12 @@ static void CheckOrdering(const vector<int> &look,
 			  const vector< vector<uint8> > &memories,
 			  const vector<int> &ordering) {
   VPRINTF("CheckOrdering [");
-  for (int i = 0; i < ordering.size(); i++) {
+  for (size_t i = 0; i < ordering.size(); i++) {
     VPRINTF("%d ", ordering[i]);
   }
   VPRINTF("]...\n");
 
-  for (int lo = 0; lo < look.size() - 1; lo++) {
+  for (size_t lo = 0; lo < look.size() - 1; lo++) {
     int ii = look[lo], jj = look[lo + 1];
     const vector<uint8> &mem1 = memories[ii];
     const vector<uint8> &mem2 = memories[jj];
@@ -179,21 +182,21 @@ static void CheckOrdering(const vector<int> &look,
 
     if (!LessEqual(mem1, mem2, ordering)) {
       printf("On these memories (note this ignores look):\n");
-      for (int i = 0; i < memories.size(); i++) {
+      for (size_t i = 0; i < memories.size(); i++) {
 	const vector<uint8> &mem = memories[i];
-	for (int j = 0; j < mem.size(); j++) {
+	for (size_t j = 0; j < mem.size(); j++) {
 	  printf("%3d ", mem[j]);
 	}
 	printf("\n");
       }
 
       printf("Illegal ordering: [");
-      for (int i = 0; i < ordering.size(); i++) {
+      for (size_t i = 0; i < ordering.size(); i++) {
 	printf("%d ", ordering[i]);
       }
       printf("] at memories #%d and #%d:\n", ii, jj);
 
-      for (int i = 0; i < ordering.size(); i++) {
+      for (size_t i = 0; i < ordering.size(); i++) {
 	int p = ordering[i];
 	printf ("%d is %d vs %d\n", p, mem1[p], mem2[p]);
       }
@@ -262,7 +265,7 @@ void Objective::EnumeratePartialRec(const vector<int> &look,
     if (*limit > 0) --*limit;
   } else {
     prefix->resize(prefix->size() + 1);
-    for (int i = 0; i < candidates.size(); i++) {
+    for (size_t i = 0; i < candidates.size(); i++) {
       (*prefix)[prefix->size() - 1] = candidates[i];
       EnumeratePartialRec(look, prefix, remain, f, limit, seed);
       if (*limit == 0) {
@@ -278,7 +281,7 @@ void Objective::EnumerateFull(const vector<int> &look,
 			      void (*f)(const vector<int> &ordering),
 			      int limit, int seed) {
   vector<int> prefix, left;
-  for (int i = 0; i < memories[0].size(); i++) {
+  for (size_t i = 0; i < memories[0].size(); i++) {
     left.push_back(i);
   }
   EnumeratePartialRec(look, &prefix, left, f, &limit, seed);
@@ -287,9 +290,9 @@ void Objective::EnumerateFull(const vector<int> &look,
 void Objective::EnumerateFullAll(void (*f)(const vector<int> &ordering),
 				 int limit, int seed) {
   vector<int> look;
-  for (int i = 0; i < memories.size(); i++) {
+  for (size_t i = 0; i < memories.size(); i++) {
     if (i > 0 && memories[i] == memories[i - 1]) {
-      VPRINTF("Duplicate memory at %d-%d\n", i - 1, i);
+      VPRINTF("Duplicate memory at %zu-%zu\n", i - 1, i);
       // PERF don't include it!
       // look.push_back(i);
     } else {
@@ -297,4 +300,56 @@ void Objective::EnumerateFullAll(void (*f)(const vector<int> &ordering),
     }
   }
   EnumerateFull(look, f, limit, seed);
+}
+
+// Storage for collected orderings during decreasing enumeration
+static vector<vector<int>> *g_collected_orderings = nullptr;
+
+static void CollectOrdering(const vector<int> &ordering) {
+  if (g_collected_orderings) {
+    g_collected_orderings->push_back(ordering);
+  }
+}
+
+void Objective::EnumerateFullAllWithDecreasing(
+    void (*f)(const vector<int> &ordering),
+    int limit, int seed) {
+  
+  // First, enumerate normal (increasing) objectives
+  int half_limit = (limit > 0) ? limit / 2 : -1;
+  EnumerateFullAll(f, half_limit, seed);
+  
+  // Now create inverted memories and enumerate again to find "decreasing" objectives
+  vector< vector<uint8> > inverted_memories;
+  inverted_memories.reserve(memories.size());
+  for (size_t i = 0; i < memories.size(); i++) {
+    vector<uint8> inv;
+    inv.reserve(memories[i].size());
+    for (size_t j = 0; j < memories[i].size(); j++) {
+      inv.push_back(255 - memories[i][j]);  // Invert the byte
+    }
+    inverted_memories.push_back(std::move(inv));
+  }
+  
+  // Create a temporary Objective with inverted memories
+  Objective inv_obj(inverted_memories);
+  
+  // Collect orderings, then negate and emit them
+  vector<vector<int>> collected;
+  g_collected_orderings = &collected;
+  
+  int remaining = (limit > 0) ? limit - half_limit : -1;
+  inv_obj.EnumerateFullAll(CollectOrdering, remaining, seed + 12345);
+  
+  g_collected_orderings = nullptr;
+  
+  // Emit collected orderings with negated indices
+  for (const auto &ordering : collected) {
+    vector<int> negated;
+    negated.reserve(ordering.size());
+    for (int idx : ordering) {
+      negated.push_back(-idx);
+    }
+    f(negated);
+  }
 }
